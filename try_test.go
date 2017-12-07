@@ -6,8 +6,148 @@ import (
 	"reflect"
 	"testing"
 
-	multierror "github.com/hashicorp/go-multierror"
+	"context"
+	"time"
+
+	"github.com/hashicorp/go-multierror"
 )
+
+type exam struct {
+	description string
+	fn          func() func() error
+	ctx         context.Context
+	validate    func([]error, bool, *testing.T)
+}
+
+var exams = []exam{
+	{
+		"length of errs should be zero",
+		func() func() error {
+			return func() error {
+				return nil
+			}
+		},
+		context.Background(),
+		func(e []error, b bool, t *testing.T) {
+			if len(e) != 0 {
+				t.Errorf("expected length of error be 0 but it's %d", len(e))
+			}
+			if !b {
+				t.Errorf("channel should be closed but it is not")
+			}
+		},
+	},
+	{"should return 2 error",
+		func() func() error {
+			x := 0
+			return func() error {
+				if x != 2 {
+					x++
+					return errors.New("test")
+				}
+
+				return nil
+			}
+		},
+		context.Background(),
+		func(e []error, b bool, t *testing.T) {
+			if len(e) != 2 {
+				t.Errorf("expected length of error be 2 but it's %d", len(e))
+			}
+			if !b {
+				t.Errorf("channel should be closed but it is not")
+			}
+		},
+	}, {"should cancel",
+		func() func() error {
+			return func() error {
+				time.Sleep(time.Millisecond)
+				return errors.New("test")
+			}
+		},
+		func() context.Context {
+			c, cl := context.WithTimeout(context.Background(), time.Duration(0))
+			defer cl()
+			return c
+		}(),
+		func(e []error, b bool, t *testing.T) {
+			if len(e) != 0 {
+				t.Errorf("expected length of error be 0 but it's %d", len(e))
+			}
+			if !b {
+				t.Errorf("channel should be closed but it is not")
+			}
+		},
+	},
+}
+
+func TestWithCancel(t *testing.T) {
+	for _, c := range exams {
+		t.Log(c.description)
+		cErr := WithCancel(c.ctx, time.Millisecond, 20, c.fn())
+		errs := make([]error, 0)
+		to := time.After(20 * time.Millisecond)
+	loop:
+		for {
+			select {
+			case err, open := <-cErr:
+				if !open {
+					c.validate(errs, true, t)
+					break loop
+				} else {
+					errs = append(errs, err)
+				}
+			case <-to:
+				c.validate(errs, false, t)
+				break loop
+			}
+		}
+	}
+
+}
+
+func TestLimited(t *testing.T) {
+	exams := []struct {
+		fn    func() error
+		count int
+	}{
+		{func() error { return errors.New("test") }, 5},
+		{func() error { return nil }, 0},
+	}
+next:
+	for _, v := range exams {
+		limit := 5
+		var counter int
+		cErr := Limited(limit, time.Millisecond, 1, v.fn)
+		to := time.After(2 * time.Second)
+		for {
+			select {
+			case _, open := <-cErr:
+				if !open {
+					if counter != v.count {
+						t.Errorf("expected limited should invoke fn %d times but did it %d time(s)", v.count, counter)
+					}
+					break next
+				} else {
+					counter++
+				}
+			case <-to:
+				t.Errorf("expected limited should be done but it didn't")
+				break next
+			}
+		}
+	}
+}
+
+func TestFibonacci(t *testing.T) {
+	cases := []uint{0, 1, 1, 2, 3, 5, 8, 12, 12, 12, 12, 12}
+	f := fibonacci(12)
+	for i := 0; i < len(cases); i++ {
+		if x := f(); x != cases[i] {
+			t.Errorf("expected %d but value is %d", cases[i], x)
+		}
+	}
+}
 
 func TestTryExample(t *testing.T) {
 	SomeFunction := func() (string, error) {
