@@ -1,6 +1,6 @@
 // Package try provides retry functionality.
 //     var value string
-//     err := retry.Do(func(attempt int) (retry bool, err error) {
+//     err := try.Do(func(attempt int) (retry bool, err error) {
 //       var err error
 //       value, err = SomeFunction()
 //       return attempt < 5, err // try 5 times
