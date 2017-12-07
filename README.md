@@ -1,20 +1,14 @@
-# try [![GoDoc](https://godoc.org/github.com/matryer/try?status.svg)](https://godoc.org/github.com/matryer/try) [![Go Report Card](https://goreportcard.com/badge/github.com/matryer/try)](https://goreportcard.com/report/github.com/matryer/try)
-
 Idiomatic Go retry package. Thanks to [@rowland](https://github.com/rowland) for code review.
 
-```
-go get gopkg.in/matryer/try.v1
-or
-drop gopkg.in/matryer/try.v1
-```
-
-* Learn more about [Drop](https://github.com/matryer/drop)
+It is based on [Mat Reyer's `try` package](https://github.com/matryer/try),
+modified to return
+[`multierror`](https://github.com/hashicorp/go-multierror)
 
 ### Usage
 
 Just call `try.Do` with the function you want to retry in the event of an error:
 
-  * Call `try.Do` that returns a `bool` indicating whether to retry or not, and an `error` 
+  * Call `try.Do` that returns a `bool` indicating whether to retry or not, and an `error`
   * The `attempt` argument will start at 1 and count up
   * `try.Do` blocks until you return `false`, or a `nil` error
   * `try.Do` returns the last error or `nil` if it was successful
