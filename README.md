@@ -2,7 +2,7 @@ Idiomatic Go retry package. Thanks to [@rowland](https://github.com/rowland) for
 
 It is based on [Mat Reyer's `try` package](https://github.com/matryer/try),
 modified to return
-[`multierror`](https://github.com/hashicorp/go-multierror)
+[`multierror`](https://github.com/hashicorp/go-multierror).
 
 ### Usage
 
