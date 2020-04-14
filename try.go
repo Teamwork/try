@@ -25,7 +25,10 @@ package try
 import (
 	"errors"
 
-	multierror "github.com/hashicorp/go-multierror"
+	"context"
+	"time"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 // MaxRetries is the maximum number of retries before bailing.
@@ -82,4 +85,61 @@ func IsMaxRetries(err error) bool {
 		return merr.Errors[len(merr.Errors)-1] == errMaxRetriesReached
 	}
 	return err == errMaxRetriesReached
+}
+
+// Limited try to do fn in limit times and will sleep in (logarithmic) duration of unit (millisecond, second,etc) and
+// not more than unit * maxSleep.
+// The return channel stream's fn error in each iteration and can be use for blocking or/and if caller is interested
+func Limited(limit int, unit time.Duration, maxSleep uint, fn func() error) <-chan error {
+	r := make(chan error)
+	go func() {
+		ctx, cl := context.WithCancel(context.Background())
+		t := WithCancel(ctx, unit, maxSleep, fn)
+		defer cl()
+		defer close(r)
+		for i := 0; i < limit; i++ {
+			r <- <-t
+		}
+	}()
+	return r
+}
+
+// WithCancel try to do fn until context will cancel or fn return nil and will sleep in (logarithmic) duration of
+// unit (millisecond, second,etc) and not more than unit * maxSleep.
+// The return channel stream's fn error in each iteration and can be use for blocking or/and if caller is interested
+func WithCancel(ctx context.Context, unit time.Duration, maxSleep uint, fn func() error) <-chan error {
+	f := fibonacci(maxSleep)
+	c := time.After(time.Duration(f()) * unit)
+	r := make(chan error)
+	go func() {
+		defer close(r)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-c:
+				if err := fn(); err != nil {
+					r <- err
+					c = time.After(time.Duration(f()) * unit)
+					continue
+				}
+				return
+			}
+		}
+	}()
+	return r
+}
+
+func fibonacci(max uint) func() uint {
+	var x, y uint
+	return func() uint {
+		if x >= max {
+			return max
+		} else if x < 1 {
+			x++
+			return y
+		}
+		x, y = x+y, x
+		return y
+	}
 }
